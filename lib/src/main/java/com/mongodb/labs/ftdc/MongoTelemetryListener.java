@@ -17,12 +17,38 @@
 package com.mongodb.labs.ftdc;
 
 import com.mongodb.MongoClientSettings;
+import com.mongodb.MongoCommandException;
+import com.mongodb.MongoSocketException;
+import com.mongodb.MongoSocketReadTimeoutException;
 import com.mongodb.ServerAddress;
 import com.mongodb.connection.ClusterDescription;
 import com.mongodb.connection.ClusterId;
 import com.mongodb.connection.ServerDescription;
-import com.mongodb.event.*;
-import org.bson.*;
+import com.mongodb.event.ClusterClosedEvent;
+import com.mongodb.event.ClusterDescriptionChangedEvent;
+import com.mongodb.event.ClusterListener;
+import com.mongodb.event.ClusterOpeningEvent;
+import com.mongodb.event.CommandFailedEvent;
+import com.mongodb.event.CommandListener;
+import com.mongodb.event.CommandStartedEvent;
+import com.mongodb.event.CommandSucceededEvent;
+import com.mongodb.event.ConnectionCheckOutFailedEvent;
+import com.mongodb.event.ConnectionCheckOutStartedEvent;
+import com.mongodb.event.ConnectionCheckedInEvent;
+import com.mongodb.event.ConnectionCheckedOutEvent;
+import com.mongodb.event.ConnectionClosedEvent;
+import com.mongodb.event.ConnectionCreatedEvent;
+import com.mongodb.event.ConnectionPoolClearedEvent;
+import com.mongodb.event.ConnectionPoolClosedEvent;
+import com.mongodb.event.ConnectionPoolCreatedEvent;
+import com.mongodb.event.ConnectionPoolListener;
+import com.mongodb.event.ConnectionReadyEvent;
+import org.bson.BsonArray;
+import org.bson.BsonDocument;
+import org.bson.BsonDouble;
+import org.bson.BsonInt32;
+import org.bson.BsonInt64;
+import org.bson.BsonString;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -36,6 +62,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 final class MongoTelemetryListener implements ClusterListener, CommandListener, ConnectionPoolListener {
 
+
     private final static class ConnectionPoolStatistics {
         private final AtomicLong clearedCount = new AtomicLong();
         private final AtomicLong checkOutStartedCount = new AtomicLong();
@@ -45,35 +72,39 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
         private final AtomicLong createdCount = new AtomicLong();
         private final AtomicLong readyCount = new AtomicLong();
         private final AtomicLong closedCount = new AtomicLong();
+        private final AtomicLong checkOutsInProgressCount = new AtomicLong();
+        private final AtomicLong operationsInProgressCount = new AtomicLong();
     }
 
     private final MongoTelemetryTracker telemetryTracker;
-    private final MongoClientSettings clientSettings;
     private volatile ClusterId clusterId;
     private volatile ClusterDescription clusterDescription;
 
-    private final AtomicLong commandsInProgress = new AtomicLong();
-    private final AtomicLong commandsCompleted = new AtomicLong();
-    private final AtomicLong commandGte0Ms = new AtomicLong();
-    private final AtomicLong commandGte10Ms = new AtomicLong();
-    private final AtomicLong commandGte100Ms = new AtomicLong();
-    private final AtomicLong commandGte1000Ms = new AtomicLong();
-    private final AtomicLong commandGte10000Ms = new AtomicLong();
-    private final AtomicLong commandGte100000Ms = new AtomicLong();
+    private final AtomicLong commandsInProgressCount = new AtomicLong();
+    private final AtomicLong commandsCompletedCount = new AtomicLong();
+    private final AtomicLong socketTimeoutCommandFailureCount = new AtomicLong();
+    private final AtomicLong socketErrorCommandFailureCount = new AtomicLong();
+
+    private final ConcurrentHashMap<Integer, AtomicLong> serverErrorCodeCountMap = new ConcurrentHashMap<>();
+    private final AtomicLong commandGte0MsCount = new AtomicLong();
+    private final AtomicLong commandGte10MsCount = new AtomicLong();
+    private final AtomicLong commandGte100MsCount = new AtomicLong();
+    private final AtomicLong commandGte1000MsCount = new AtomicLong();
+    private final AtomicLong commandGte10000MsCount = new AtomicLong();
+    private final AtomicLong commandGte100000MsCount = new AtomicLong();
 
     private final Map<ServerAddress, ConnectionPoolStatistics> connectionPoolStatisticsMap = new ConcurrentHashMap<>();
 
     public static void addToClientSettings(MongoTelemetryTracker telemetryTracker,
                                            MongoClientSettings.Builder clientSettingsBuilder) {
-        MongoTelemetryListener telemetryListener = new MongoTelemetryListener(telemetryTracker, clientSettingsBuilder.build());
+        MongoTelemetryListener telemetryListener = new MongoTelemetryListener(telemetryTracker);
         clientSettingsBuilder.applyToClusterSettings(builder -> builder.addClusterListener(telemetryListener));
         clientSettingsBuilder.addCommandListener(telemetryListener);
         clientSettingsBuilder.applyToConnectionPoolSettings(builder -> builder.addConnectionPoolListener(telemetryListener));
     }
 
-    private MongoTelemetryListener(MongoTelemetryTracker telemetryTracker, MongoClientSettings clientSettings) {
+    private MongoTelemetryListener(MongoTelemetryTracker telemetryTracker) {
         this.telemetryTracker = telemetryTracker;
-        this.clientSettings = clientSettings;
     }
 
     public ClusterId getClusterId() {
@@ -98,7 +129,7 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
 
     @Override
     public void commandStarted(CommandStartedEvent event) {
-        commandsInProgress.incrementAndGet();
+        commandsInProgressCount.incrementAndGet();
     }
 
     @Override
@@ -109,26 +140,35 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
     @Override
     public void commandFailed(CommandFailedEvent event) {
         commandCompleted(event.getElapsedTime(TimeUnit.MILLISECONDS));
+        if (event.getThrowable() instanceof MongoCommandException) {
+            MongoCommandException commandException = (MongoCommandException) event.getThrowable();
+            serverErrorCodeCountMap.computeIfAbsent(commandException.getErrorCode(), errorCode -> new AtomicLong()).incrementAndGet();
+        } else if (event.getThrowable() instanceof MongoSocketReadTimeoutException) {
+            socketTimeoutCommandFailureCount.incrementAndGet();
+        } else if (event.getThrowable() instanceof MongoSocketException) {
+            socketErrorCommandFailureCount.incrementAndGet();
+        }
+
     }
 
     private void commandCompleted(long elapsedTimeMillis) {
-        commandsInProgress.decrementAndGet();
-        commandsCompleted.incrementAndGet();
+        commandsInProgressCount.decrementAndGet();
+        commandsCompletedCount.incrementAndGet();
 
         if (elapsedTimeMillis >= 1000000) {
-            commandGte100000Ms.incrementAndGet();
+            commandGte100000MsCount.incrementAndGet();
         } else if (elapsedTimeMillis >= 100000) {
-            commandGte10000Ms.incrementAndGet();
+            commandGte10000MsCount.incrementAndGet();
         } else if (elapsedTimeMillis >= 10000) {
-            commandGte10000Ms.incrementAndGet();
+            commandGte10000MsCount.incrementAndGet();
         } else if (elapsedTimeMillis >= 1000) {
-            commandGte1000Ms.incrementAndGet();
+            commandGte1000MsCount.incrementAndGet();
         } else if (elapsedTimeMillis >= 100) {
-            commandGte100Ms.incrementAndGet();
+            commandGte100MsCount.incrementAndGet();
         } else if (elapsedTimeMillis >= 10) {
-            commandGte10Ms.incrementAndGet();
+            commandGte10MsCount.incrementAndGet();
         } else {
-            commandGte0Ms.incrementAndGet();
+            commandGte0MsCount.incrementAndGet();
         }
     }
 
@@ -152,6 +192,7 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
     public void connectionCheckOutStarted(ConnectionCheckOutStartedEvent event) {
         ConnectionPoolStatistics statistics = connectionPoolStatisticsMap.get(event.getServerId().getAddress());
         statistics.checkOutStartedCount.incrementAndGet();
+        statistics.checkOutsInProgressCount.incrementAndGet();
     }
 
     @Override
@@ -159,6 +200,8 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
         ConnectionPoolStatistics statistics =
                 connectionPoolStatisticsMap.get(event.getConnectionId().getServerId().getAddress());
         statistics.checkedOutCount.incrementAndGet();
+        statistics.checkOutsInProgressCount.decrementAndGet();
+        statistics.operationsInProgressCount.incrementAndGet();
     }
 
     @Override
@@ -166,6 +209,7 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
         ConnectionPoolStatistics statistics =
                 connectionPoolStatisticsMap.get(event.getServerId().getAddress());
         statistics.checkOutFailedCount.incrementAndGet();
+        statistics.checkOutsInProgressCount.decrementAndGet();
     }
 
     @Override
@@ -173,6 +217,7 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
         ConnectionPoolStatistics statistics =
                 connectionPoolStatisticsMap.get(event.getConnectionId().getServerId().getAddress());
         statistics.checkedInCount.incrementAndGet();
+        statistics.operationsInProgressCount.incrementAndGet();
     }
 
     @Override
@@ -236,16 +281,25 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
     private void appendCommands(BsonDocument periodicDocument) {
         BsonDocument commandsDocument = new BsonDocument();
 
-        commandsDocument.append("inProgress", new BsonInt64(commandsInProgress.get()));
-        commandsDocument.append("completed", new BsonInt64(commandsCompleted.get()));
+        commandsDocument.append("inProgress", new BsonInt64(commandsInProgressCount.get()));
+        commandsDocument.append("completed", new BsonInt64(commandsCompletedCount.get()));
+        commandsDocument.append("socketError", new BsonInt64(socketErrorCommandFailureCount.get()));
+        commandsDocument.append("socketTimeout", new BsonInt64(socketTimeoutCommandFailureCount.get()));
 
-        commandsDocument.append("gte0Millis", new BsonInt64(commandGte0Ms.get()));
-        commandsDocument.append("gte10Millis", new BsonInt64(commandGte10Ms.get()));
-        commandsDocument.append("gte100Millis", new BsonInt64(commandGte100Ms.get()));
-        commandsDocument.append("gte1000Millis", new BsonInt64(commandGte1000Ms.get()));
-        commandsDocument.append("gte10000Millis", new BsonInt64(commandGte10000Ms.get()));
-        commandsDocument.append("gte100000Millis", new BsonInt64(commandGte10000Ms.get()));
-        commandsDocument.append("gte1000000Millis", new BsonInt64(commandGte100000Ms.get()));
+        BsonDocument serverErrorResponsesDocument = new BsonDocument();
+        for (Map.Entry<Integer, AtomicLong> entry : serverErrorCodeCountMap.entrySet()) {
+            serverErrorResponsesDocument.append(Integer.toString(entry.getKey()), new BsonInt64(entry.getValue().get()));
+        }
+
+        commandsDocument.append("serverErrorResponses", serverErrorResponsesDocument);
+
+        commandsDocument.append("gte0Millis", new BsonInt64(commandGte0MsCount.get()));
+        commandsDocument.append("gte10Millis", new BsonInt64(commandGte10MsCount.get()));
+        commandsDocument.append("gte100Millis", new BsonInt64(commandGte100MsCount.get()));
+        commandsDocument.append("gte1000Millis", new BsonInt64(commandGte1000MsCount.get()));
+        commandsDocument.append("gte10000Millis", new BsonInt64(commandGte10000MsCount.get()));
+        commandsDocument.append("gte100000Millis", new BsonInt64(commandGte10000MsCount.get()));
+        commandsDocument.append("gte1000000Millis", new BsonInt64(commandGte100000MsCount.get()));
 
         periodicDocument.append("commands", commandsDocument);
     }
@@ -257,6 +311,9 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
             BsonDocument poolDocument = new BsonDocument();
 
             poolDocument.append("address", new BsonString(cur.getKey().toString()));
+            poolDocument.append("checkOutsInProgress", new BsonInt64(cur.getValue().checkOutsInProgressCount.get()));
+            poolDocument.append("operationsInProgress", new BsonInt64(cur.getValue().checkOutsInProgressCount.get()));
+
             poolDocument.append("ready", new BsonInt64(cur.getValue().readyCount.get()));
             poolDocument.append("cleared", new BsonInt64(cur.getValue().clearedCount.get()));
             poolDocument.append("opened", new BsonInt64(cur.getValue().createdCount.get()));
