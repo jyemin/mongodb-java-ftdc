@@ -24,31 +24,32 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
-import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 final class MongoTelemetryTracker implements Closeable {
 
-    private final ScheduledExecutorService writingService = Executors.newSingleThreadScheduledExecutor();
+    private final ScheduledExecutorService writingService =
+            Executors.newSingleThreadScheduledExecutor(new DaemonThreadFactory());
 
     private final Map<ClusterId, MongoTelemetryListener> telemetryListeners = new ConcurrentHashMap<>();
     private BufferedWriter writer;
 
     void init() throws IOException {
-        Path path = Files.createFile(FileSystems.getDefault().getPath("ftdc.out"));
-        writer = Files.newBufferedWriter(path);
+        writer = Files.newBufferedWriter(FileSystems.getDefault().getPath("ftdc.out"),
+                StandardOpenOption.CREATE, StandardOpenOption.WRITE);
         writingService.scheduleAtFixedRate(this::writeCurrentState, 1, 1, TimeUnit.SECONDS);
     }
 
     @Override
     public void close() {
         writingService.shutdown();
-//        writer.flush();
-//        writer.close();
+        try {
+            writer.close();
+        } catch (IOException e) {
+            // ignore
+        }
     }
 
     void add(MongoTelemetryListener telemetryListener) {
@@ -59,7 +60,7 @@ final class MongoTelemetryTracker implements Closeable {
         telemetryListeners.remove(telemetryListener.getClusterId());
     }
 
-    private void writeCurrentState()  {
+    private void writeCurrentState() {
         try {
             for (MongoTelemetryListener cur : telemetryListeners.values()) {
                 BsonDocument currentStateDocument = cur.asPeriodicDocument();
@@ -68,7 +69,17 @@ final class MongoTelemetryTracker implements Closeable {
                 writer.flush();
             }
         } catch (IOException e) {
-            // ignore for now
+            close();
         }
     }
+
+    private static final class DaemonThreadFactory implements ThreadFactory {
+        @Override
+        public Thread newThread(final Runnable runnable) {
+            Thread thread = new Thread(runnable, "MongoTelemetryTracker");
+            thread.setDaemon(true);
+            return thread;
+        }
+    }
+
 }
