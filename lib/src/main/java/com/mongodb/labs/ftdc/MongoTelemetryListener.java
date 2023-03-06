@@ -53,6 +53,7 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
     private volatile ClusterDescription clusterDescription;
 
     private final AtomicLong commandsInProgress = new AtomicLong();
+    private final AtomicLong commandsCompleted = new AtomicLong();
     private final AtomicLong commandGte0Ms = new AtomicLong();
     private final AtomicLong commandGte10Ms = new AtomicLong();
     private final AtomicLong commandGte100Ms = new AtomicLong();
@@ -112,6 +113,7 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
 
     private void commandCompleted(long elapsedTimeMillis) {
         commandsInProgress.decrementAndGet();
+        commandsCompleted.incrementAndGet();
 
         if (elapsedTimeMillis >= 1000000) {
             commandGte100000Ms.incrementAndGet();
@@ -235,6 +237,7 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
         BsonDocument commandsDocument = new BsonDocument();
 
         commandsDocument.append("inProgress", new BsonInt64(commandsInProgress.get()));
+        commandsDocument.append("completed", new BsonInt64(commandsCompleted.get()));
 
         commandsDocument.append("gte0Millis", new BsonInt64(commandGte0Ms.get()));
         commandsDocument.append("gte10Millis", new BsonInt64(commandGte10Ms.get()));
