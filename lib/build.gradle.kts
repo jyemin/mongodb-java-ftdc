@@ -9,6 +9,7 @@
 plugins {
     // Apply the java-library plugin for API and implementation separation.
     `java-library`
+    `maven-publish`
 }
 
 repositories {
@@ -31,3 +32,16 @@ tasks.named<Test>("test") {
     // Use JUnit Platform for unit tests.
     useJUnitPlatform()
 }
+
+publishing {
+    publications {
+        create<MavenPublication>("maven") {
+            groupId = "org.mongodb"
+            artifactId = "mongodb-ftdc"
+            version = "1.0-SNAPSHOT"
+
+            from(components["java"])
+        }
+    }
+}
+
