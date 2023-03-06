@@ -6,8 +6,8 @@ package com.mongodb.labs.ftdc;
 import com.mongodb.MongoClientSettings;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
+import org.bson.Document;
 import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.*;
 
 class MongoTelemetryTest {
     @Test void testTelemetry() throws InterruptedException {
@@ -15,6 +15,9 @@ class MongoTelemetryTest {
         MongoTelemetry.addTelemetryListeners(clientSettingsBuilder);
         MongoClient client = MongoClients.create(clientSettingsBuilder.build());
 
-        Thread.sleep(Long.MAX_VALUE);
+        for (;;) {
+            client.getDatabase("admin").runCommand(new Document("ping", 1));
+            Thread.sleep(100);
+        }
     }
 }
