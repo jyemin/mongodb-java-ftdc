@@ -1,4 +1,11 @@
 # MongoDB Telemetry
+
+## Summary
+
+Inspired by [Full Time Diagnostic Data Collection (FTDC)](https://www.mongodb.com/docs/manual/administration/analyzing-mongodb-performance/#full-time-diagnostic-data-capture) for MongoDB server,
+this project defines a set of event listeners to be used with the 
+[MongoDB Java driver](https://github.com/mongodb/mongo-java-driver)
+and analyzed with T2 graphing tools.
                     
 ## Behavior
 
@@ -61,7 +68,7 @@ in the current working directory.  Creates the file if it doesn't exist, otherwi
 ## Usage
     
 Create and configure an instance of `MongoClientSettings.Builder`.  Right before building it, call
-`com.mongodb.labs.ftdc.MongoTelemetry#addTelemetryListeners`.  Then create the `MongoClient`.
+`com.mongodb.labs.ftdc.MongoTelemetry#addTelemetryListeners`.  Then create the `MongoClient`.   
 
 ```java
 MongoClientSettings.Builder clientSettingsBuilder = MongoClientSettings.builder();
