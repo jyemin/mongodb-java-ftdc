@@ -21,7 +21,6 @@ import org.bson.BsonDocument;
 
 import java.io.BufferedWriter;
 import java.io.Closeable;
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
@@ -40,7 +39,7 @@ final class MongoTelemetryTracker implements Closeable {
     private BufferedWriter writer;
 
     void init() throws IOException {
-        Path path = Files.createFile(FileSystems.getDefault().getPath("ftdc"));
+        Path path = Files.createFile(FileSystems.getDefault().getPath("ftdc.out"));
         writer = Files.newBufferedWriter(path);
         writingService.scheduleAtFixedRate(this::writeCurrentState, 1, 1, TimeUnit.SECONDS);
     }

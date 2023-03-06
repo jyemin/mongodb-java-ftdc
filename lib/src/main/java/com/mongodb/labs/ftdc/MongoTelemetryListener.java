@@ -19,13 +19,12 @@ package com.mongodb.labs.ftdc;
 import com.mongodb.MongoClientSettings;
 import com.mongodb.connection.ClusterDescription;
 import com.mongodb.connection.ClusterId;
+import com.mongodb.connection.ServerDescription;
 import com.mongodb.event.ClusterClosedEvent;
 import com.mongodb.event.ClusterDescriptionChangedEvent;
 import com.mongodb.event.ClusterListener;
 import com.mongodb.event.ClusterOpeningEvent;
-import org.bson.BsonDocument;
-import org.bson.BsonInt32;
-import org.bson.BsonString;
+import org.bson.*;
 
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
@@ -49,22 +48,14 @@ final class MongoTelemetryListener implements ClusterListener {
         this.clientSettings = clientSettings;
     }
 
-    public MongoClientSettings getClientSettings() {
-        return clientSettings;
-    }
-
     public ClusterId getClusterId() {
         return clusterId;
     }
 
-    public ClusterDescription getClusterDescription() {
-        return clusterDescription;
-    }
-
     @Override
     public void clusterOpening(ClusterOpeningEvent event) {
-       clusterId = event.getClusterId();
-       telemetryTracker.add(this);
+        clusterId = event.getClusterId();
+        telemetryTracker.add(this);
     }
 
     @Override
@@ -82,6 +73,38 @@ final class MongoTelemetryListener implements ClusterListener {
         BsonDocument periodicDocument = new BsonDocument();
         periodicDocument.append("timestamp", timestamp);
         periodicDocument.append("type", new BsonInt32(2));
+        periodicDocument.append("clientId", new BsonString(clusterId.getValue()));
+
+        appendClusterDescription(periodicDocument);
         return periodicDocument;
     }
+
+    private void appendClusterDescription(BsonDocument periodicDocument) {
+        ClusterDescription curDescription = clusterDescription;
+        if (curDescription != null) {
+            BsonDocument topologyDocument = new BsonDocument();
+            topologyDocument.append("type", new BsonString(curDescription.getType().toString()));
+
+            BsonArray serverArray = new BsonArray();
+            for (ServerDescription curServerDescription : curDescription.getServerDescriptions()) {
+                BsonDocument serverDocument = new BsonDocument();
+
+                serverDocument.append("address", new BsonString(curServerDescription.getAddress().toString()));
+                serverDocument.append("state", new BsonString(curServerDescription.getState().toString()));
+                serverDocument.append("type", new BsonString(curServerDescription.getType().toString()));
+                serverDocument.append("rttMillis",
+                        new BsonDouble(nanosToMilliseconds(curServerDescription.getRoundTripTimeNanos())));
+
+                serverArray.add(serverDocument);
+            }
+
+            topologyDocument.append("servers", serverArray);
+            periodicDocument.append("topology", topologyDocument);
+        }
+    }
+
+    private double nanosToMilliseconds(final long nanos) {
+        return nanos / 1000000.0;
+    }
+
 }
