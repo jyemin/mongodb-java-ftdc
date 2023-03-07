@@ -3,6 +3,7 @@
  */
 package com.mongodb.labs.ftdc;
 
+import com.mongodb.ConnectionString;
 import com.mongodb.MongoClientSettings;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
@@ -13,12 +14,13 @@ class MongoTelemetryTest {
     @Test
     void testTelemetry() throws InterruptedException {
         MongoClientSettings.Builder clientSettingsBuilder = MongoClientSettings.builder();
+        clientSettingsBuilder.applyConnectionString(new ConnectionString("mongodb://localhost,localhost:27018/?replicaset=rs1"));
         MongoTelemetry.addTelemetryListeners(clientSettingsBuilder);
-        MongoClient client = MongoClients.create(clientSettingsBuilder.build());
-
-        for (int i = 0; i < 30; i++) {
-            client.getDatabase("admin").runCommand(new Document("ping", 1));
-            Thread.sleep(100);
+        try (MongoClient client = MongoClients.create(clientSettingsBuilder.build())) {
+            for (int i = 0; i < 30; i++) {
+                client.getDatabase("admin").runCommand(new Document("ping", 1));
+                Thread.sleep(100);
+            }
         }
     }
 }
