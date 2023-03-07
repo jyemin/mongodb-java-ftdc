@@ -10,12 +10,13 @@ import org.bson.Document;
 import org.junit.jupiter.api.Test;
 
 class MongoTelemetryTest {
-    @Test void testTelemetry() throws InterruptedException {
+    @Test
+    void testTelemetry() throws InterruptedException {
         MongoClientSettings.Builder clientSettingsBuilder = MongoClientSettings.builder();
         MongoTelemetry.addTelemetryListeners(clientSettingsBuilder);
         MongoClient client = MongoClients.create(clientSettingsBuilder.build());
 
-        for (;;) {
+        for (int i = 0; i < 10; i++) {
             client.getDatabase("admin").runCommand(new Document("ping", 1));
             Thread.sleep(100);
         }

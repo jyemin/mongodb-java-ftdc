@@ -9,10 +9,39 @@ and analyzed with T2 graphing tools.
                     
 ## Behavior
 
-Outputs one JSON document per line every 1 second for each open MongoClient to a file called `ftdc.out` 
-in the current working directory.  Creates the file if it doesn't exist, otherwise appends to existing file.
+Outputs one JSON document per line every 1 second for each open MongoClient to a file called `metrics.interim` 
+in the `diagnostics.data` directory withing the current working directory.  Creates the file if it doesn't exist, o
+therwise appends to existing file.  On exit, moves `metrics.interim` to `metrics.<start timestamp>`
 
 ## Sample document
+
+### Type 0 documents
+
+Documents of this type are written once on startup.  It's basically just the client metadata minus appName.
+
+```json
+{
+  "timestamp": "2023-03-07T15:15:41.340232Z",
+  "type": 0,
+  "metadata": {
+    "driver": {
+      "name": "mongo-java-driver",
+      "version": "4.0.0"
+    },
+    "os": {
+      "type": "Darwin",
+      "name": "Mac OS X",
+      "architecture": "aarch64",
+      "version": "12.6.3"
+    },
+    "platform": "Java/Amazon.com Inc./17.0.6+10-LTS"
+  }
+}
+```
+
+### Type 2 documents
+
+Documents of this type are written once per second
 
 ```json
 {

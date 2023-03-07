@@ -17,6 +17,8 @@
 package com.mongodb.labs.ftdc;
 
 import com.mongodb.MongoClientSettings;
+import com.mongodb.WriteConcern;
+import com.mongodb.internal.operation.DropDatabaseOperation;
 
 import java.io.IOException;
 
@@ -25,10 +27,14 @@ public final class MongoTelemetry {
     private static final MongoTelemetryTracker TRACKER_INSTANCE = new MongoTelemetryTracker();
 
     static {
-        try {
-            TRACKER_INSTANCE.init();
-        } catch (IOException e) {
-            // ignore for now
+        TRACKER_INSTANCE.schedule();
+        Runtime.getRuntime().addShutdownHook(new ShutdownHook());
+    }
+
+    static class ShutdownHook extends Thread {
+        @Override
+        public void run() {
+            TRACKER_INSTANCE.close();
         }
     }
 
