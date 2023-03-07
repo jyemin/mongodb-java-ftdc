@@ -66,8 +66,19 @@ in the current working directory.  Creates the file if it doesn't exist, otherwi
 ```
 
 ## Usage
+
+Add the dependency to your project, e.g.:
+
+```xml
+<dependency>
+    <groupId>org.mongodb</groupId>
+    <artifactId>mongodb-ftdc</artifactId>
+    <version>1.0-SNAPSHOT</version>
+</dependency>
+```
     
-Create and configure an instance of `MongoClientSettings.Builder`.  Right before building it, call
+For each `MongoClient` used in your application, create and configure an instance of 
+`MongoClientSettings.Builder`.  Right before building it, call
 `com.mongodb.labs.ftdc.MongoTelemetry#addTelemetryListeners`.  Then create the `MongoClient`.   
 
 ```java
