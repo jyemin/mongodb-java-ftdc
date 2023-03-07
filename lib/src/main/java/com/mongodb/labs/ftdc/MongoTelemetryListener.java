@@ -71,7 +71,7 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 final class MongoTelemetryListener implements ClusterListener, CommandListener, ConnectionPoolListener {
 
 
-    private final static class ConnectionPoolStatistics {
+    private static final class ConnectionPoolStatistics {
         private final AtomicLong clearedCount = new AtomicLong();
         private final AtomicLong checkOutStartedCount = new AtomicLong();
         private final AtomicLong checkedOutCount = new AtomicLong();
@@ -105,8 +105,8 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
 
     private final Map<ServerAddress, ConnectionPoolStatistics> connectionPoolStatisticsMap = new ConcurrentHashMap<>();
 
-    public static void addToClientSettings(MongoTelemetryTracker telemetryTracker,
-                                           MongoClientSettings.Builder clientSettingsBuilder) {
+    public static void addToClientSettings(final MongoTelemetryTracker telemetryTracker,
+                                           final MongoClientSettings.Builder clientSettingsBuilder) {
         MongoTelemetryListener telemetryListener = new MongoTelemetryListener(telemetryTracker,
                 clientSettingsBuilder.build());
         clientSettingsBuilder.applyToClusterSettings(builder -> builder.addClusterListener(telemetryListener));
@@ -114,7 +114,7 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
         clientSettingsBuilder.applyToConnectionPoolSettings(builder -> builder.addConnectionPoolListener(telemetryListener));
     }
 
-    private MongoTelemetryListener(MongoTelemetryTracker telemetryTracker, MongoClientSettings clientSettings) {
+    private MongoTelemetryListener(final MongoTelemetryTracker telemetryTracker, final MongoClientSettings clientSettings) {
         this.telemetryTracker = telemetryTracker;
         this.clientSettings = clientSettings;
     }
@@ -124,33 +124,33 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
     }
 
     @Override
-    public void clusterOpening(ClusterOpeningEvent event) {
+    public void clusterOpening(final ClusterOpeningEvent event) {
         clusterId = event.getClusterId();
         telemetryTracker.add(this);
     }
 
     @Override
-    public void clusterClosed(ClusterClosedEvent event) {
+    public void clusterClosed(final ClusterClosedEvent event) {
         telemetryTracker.remove(this);
     }
 
     @Override
-    public void clusterDescriptionChanged(ClusterDescriptionChangedEvent event) {
+    public void clusterDescriptionChanged(final ClusterDescriptionChangedEvent event) {
         clusterDescription = event.getNewDescription();
     }
 
     @Override
-    public void commandStarted(CommandStartedEvent event) {
+    public void commandStarted(final CommandStartedEvent event) {
         commandsInProgressCount.incrementAndGet();
     }
 
     @Override
-    public void commandSucceeded(CommandSucceededEvent event) {
+    public void commandSucceeded(final CommandSucceededEvent event) {
         commandCompleted(event.getElapsedTime(MILLISECONDS));
     }
 
     @Override
-    public void commandFailed(CommandFailedEvent event) {
+    public void commandFailed(final CommandFailedEvent event) {
         commandCompleted(event.getElapsedTime(MILLISECONDS));
         if (event.getThrowable() instanceof MongoCommandException) {
             MongoCommandException commandException = (MongoCommandException) event.getThrowable();
@@ -163,7 +163,7 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
 
     }
 
-    private void commandCompleted(long elapsedTimeMillis) {
+    private void commandCompleted(final long elapsedTimeMillis) {
         commandsInProgressCount.decrementAndGet();
         commandsCompletedCount.incrementAndGet();
 
@@ -185,30 +185,30 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
     }
 
     @Override
-    public void connectionPoolCreated(ConnectionPoolCreatedEvent event) {
+    public void connectionPoolCreated(final ConnectionPoolCreatedEvent event) {
         connectionPoolStatisticsMap.put(event.getServerId().getAddress(), new ConnectionPoolStatistics());
     }
 
     @Override
-    public void connectionPoolCleared(ConnectionPoolClearedEvent event) {
+    public void connectionPoolCleared(final ConnectionPoolClearedEvent event) {
         ConnectionPoolStatistics statistics = connectionPoolStatisticsMap.get(event.getServerId().getAddress());
         statistics.clearedCount.incrementAndGet();
     }
 
     @Override
-    public void connectionPoolClosed(ConnectionPoolClosedEvent event) {
+    public void connectionPoolClosed(final ConnectionPoolClosedEvent event) {
         connectionPoolStatisticsMap.remove(event.getServerId().getAddress());
     }
 
     @Override
-    public void connectionCheckOutStarted(ConnectionCheckOutStartedEvent event) {
+    public void connectionCheckOutStarted(final ConnectionCheckOutStartedEvent event) {
         ConnectionPoolStatistics statistics = connectionPoolStatisticsMap.get(event.getServerId().getAddress());
         statistics.checkOutStartedCount.incrementAndGet();
         statistics.checkOutsInProgressCount.incrementAndGet();
     }
 
     @Override
-    public void connectionCheckedOut(ConnectionCheckedOutEvent event) {
+    public void connectionCheckedOut(final ConnectionCheckedOutEvent event) {
         ConnectionPoolStatistics statistics =
                 connectionPoolStatisticsMap.get(event.getConnectionId().getServerId().getAddress());
         statistics.checkedOutCount.incrementAndGet();
@@ -217,7 +217,7 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
     }
 
     @Override
-    public void connectionCheckOutFailed(ConnectionCheckOutFailedEvent event) {
+    public void connectionCheckOutFailed(final ConnectionCheckOutFailedEvent event) {
         ConnectionPoolStatistics statistics =
                 connectionPoolStatisticsMap.get(event.getServerId().getAddress());
         statistics.checkOutFailedCount.incrementAndGet();
@@ -225,7 +225,7 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
     }
 
     @Override
-    public void connectionCheckedIn(ConnectionCheckedInEvent event) {
+    public void connectionCheckedIn(final ConnectionCheckedInEvent event) {
         ConnectionPoolStatistics statistics =
                 connectionPoolStatisticsMap.get(event.getConnectionId().getServerId().getAddress());
         statistics.checkedInCount.incrementAndGet();
@@ -233,21 +233,21 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
     }
 
     @Override
-    public void connectionCreated(ConnectionCreatedEvent event) {
+    public void connectionCreated(final ConnectionCreatedEvent event) {
         ConnectionPoolStatistics statistics =
                 connectionPoolStatisticsMap.get(event.getConnectionId().getServerId().getAddress());
         statistics.createdCount.incrementAndGet();
     }
 
     @Override
-    public void connectionReady(ConnectionReadyEvent event) {
+    public void connectionReady(final ConnectionReadyEvent event) {
         ConnectionPoolStatistics statistics =
                 connectionPoolStatisticsMap.get(event.getConnectionId().getServerId().getAddress());
         statistics.readyCount.incrementAndGet();
     }
 
     @Override
-    public void connectionClosed(ConnectionClosedEvent event) {
+    public void connectionClosed(final ConnectionClosedEvent event) {
         ConnectionPoolStatistics statistics =
                 connectionPoolStatisticsMap.get(event.getConnectionId().getServerId().getAddress());
         statistics.closedCount.incrementAndGet();
@@ -314,7 +314,7 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
         return clientSettingsDocument;
     }
 
-    private void appendMaxConnecting(ConnectionPoolSettings connectionPoolSettings, BsonDocument settingsDocument) {
+    private void appendMaxConnecting(final ConnectionPoolSettings connectionPoolSettings, final BsonDocument settingsDocument) {
         try {
             Method getMaxConnectingMethod = ConnectionPoolSettings.class.getMethod("getMaxConnecting");
             Integer maxConnecting = (Integer) getMaxConnectingMethod.invoke(connectionPoolSettings);
@@ -337,7 +337,7 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
         return periodicDocument;
     }
 
-    private void appendClusterDescription(BsonDocument periodicDocument) {
+    private void appendClusterDescription(final BsonDocument periodicDocument) {
         ClusterDescription curDescription = clusterDescription;
         if (curDescription != null) {
             BsonDocument topologyDocument = new BsonDocument();
@@ -361,7 +361,7 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
         }
     }
 
-    private void appendCommands(BsonDocument periodicDocument) {
+    private void appendCommands(final BsonDocument periodicDocument) {
         BsonDocument commandsDocument = new BsonDocument();
 
         commandsDocument.append("inProgress", new BsonInt64(commandsInProgressCount.get()));
@@ -387,7 +387,7 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
         periodicDocument.append("commands", commandsDocument);
     }
 
-    private void appendConnectionPools(BsonDocument periodicDocument) {
+    private void appendConnectionPools(final BsonDocument periodicDocument) {
         BsonArray poolsArray = new BsonArray();
 
         for (Map.Entry<ServerAddress, ConnectionPoolStatistics> cur : connectionPoolStatisticsMap.entrySet()) {
@@ -416,7 +416,7 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
         return round(nanos / 1000000.0, 2);
     }
 
-    public static double round(double value, int places) {
+    public static double round(final double value, final int places) {
         BigDecimal bigDecimal = BigDecimal.valueOf(value);
         bigDecimal = bigDecimal.setScale(places, RoundingMode.HALF_UP);
         return bigDecimal.doubleValue();

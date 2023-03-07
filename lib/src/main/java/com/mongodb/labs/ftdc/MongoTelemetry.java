@@ -17,14 +17,11 @@
 package com.mongodb.labs.ftdc;
 
 import com.mongodb.MongoClientSettings;
-import com.mongodb.WriteConcern;
-import com.mongodb.internal.operation.DropDatabaseOperation;
-
-import java.io.IOException;
 
 public final class MongoTelemetry {
 
     private static final MongoTelemetryTracker TRACKER_INSTANCE = new MongoTelemetryTracker();
+    private MongoTelemetry() { }
 
     static {
         TRACKER_INSTANCE.schedule();
@@ -38,7 +35,7 @@ public final class MongoTelemetry {
         }
     }
 
-    public static void addTelemetryListeners(MongoClientSettings.Builder clientSettingsBuilder) {
+    public static void addTelemetryListeners(final MongoClientSettings.Builder clientSettingsBuilder) {
         MongoTelemetryListener.addToClientSettings(TRACKER_INSTANCE, clientSettingsBuilder);
     }
 }

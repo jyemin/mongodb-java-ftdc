@@ -33,7 +33,11 @@ import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
-import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 
@@ -64,11 +68,11 @@ final class MongoTelemetryTracker implements Closeable {
         }
     }
 
-    void add(MongoTelemetryListener telemetryListener) {
+    void add(final MongoTelemetryListener telemetryListener) {
         telemetryListeners.put(telemetryListener.getClusterId(), telemetryListener);
     }
 
-    void remove(MongoTelemetryListener telemetryListener) {
+    void remove(final MongoTelemetryListener telemetryListener) {
         telemetryListeners.remove(telemetryListener.getClusterId());
     }
 
@@ -88,7 +92,7 @@ final class MongoTelemetryTracker implements Closeable {
         }
     }
 
-    private void writeDocument(BsonDocument currentStateDocument) throws IOException {
+    private void writeDocument(final BsonDocument currentStateDocument) throws IOException {
         String jsonString = currentStateDocument.toJson();
         writer.write(jsonString);
         writer.newLine();
