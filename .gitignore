@@ -30,3 +30,6 @@ build
 
 # Intellij IDEA files
 .idea
+
+# Other
+.DS_Store
