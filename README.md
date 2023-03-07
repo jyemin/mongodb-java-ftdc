@@ -53,7 +53,10 @@ Documents of this type are written once per MongoClient creation
     "hosts": [
       "<host1>", "<host2>"
     ],
+    "requiredType": "REPLICA_SET",
     "replicaSet": "rs1",
+    "serverSelectionTimeoutMS": 30000,
+    "localThresholdMS": 15,
     "retryReads": true,
     "retryWrites": true,
     "compressors": [],
@@ -79,6 +82,10 @@ or with `mongodb+srv` protocol:
   "settings": {
     "directConnection": false,
     "srvHost": "<srv host>",
+    "requiredType": "REPLICA_SET",
+    "replicaSet": "rs1",
+    "serverSelectionTimeoutMS": 30000,
+    "localThresholdMS": 15,
     "retryReads": true,
     "retryWrites": true,
     "compressors": [],

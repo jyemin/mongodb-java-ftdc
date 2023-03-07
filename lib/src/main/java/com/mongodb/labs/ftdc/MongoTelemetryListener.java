@@ -274,6 +274,7 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
                     .stream().map(serverAddress -> new BsonString(serverAddress.toString()))
                     .collect(BsonArray::new, BsonArray::add, BsonArray::addAll));
         }
+        settingsDocument.append("requiredType", new BsonString(clusterSettings.getRequiredClusterType().toString()));
         if (clusterSettings.getRequiredReplicaSetName() != null) {
             settingsDocument.append("replicaSet", new BsonString(clusterSettings.getRequiredReplicaSetName()));
         }
@@ -287,6 +288,8 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
                             ? "SCRAM"
                             : clientSettings.getCredential().getMechanism()));
         }
+        settingsDocument.append("serverSelectionTimeoutMS", new BsonInt64(clusterSettings.getServerSelectionTimeout(MILLISECONDS)));
+        settingsDocument.append("localThresholdMS", new BsonInt64(clusterSettings.getLocalThreshold(MILLISECONDS)));
         settingsDocument.append("retryReads", new BsonBoolean(clientSettings.getRetryReads()));
         settingsDocument.append("retryWrites", new BsonBoolean(clientSettings.getRetryWrites()));
         settingsDocument.append("compressors", clientSettings.getCompressorList().stream()
