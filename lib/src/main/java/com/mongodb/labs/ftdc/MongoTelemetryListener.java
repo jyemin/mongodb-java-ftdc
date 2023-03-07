@@ -23,7 +23,10 @@ import com.mongodb.MongoSocketReadTimeoutException;
 import com.mongodb.ServerAddress;
 import com.mongodb.connection.ClusterDescription;
 import com.mongodb.connection.ClusterId;
+import com.mongodb.connection.ClusterSettings;
+import com.mongodb.connection.ConnectionPoolSettings;
 import com.mongodb.connection.ServerDescription;
+import com.mongodb.connection.SocketSettings;
 import com.mongodb.event.ClusterClosedEvent;
 import com.mongodb.event.ClusterDescriptionChangedEvent;
 import com.mongodb.event.ClusterListener;
@@ -44,12 +47,15 @@ import com.mongodb.event.ConnectionPoolCreatedEvent;
 import com.mongodb.event.ConnectionPoolListener;
 import com.mongodb.event.ConnectionReadyEvent;
 import org.bson.BsonArray;
+import org.bson.BsonBoolean;
 import org.bson.BsonDocument;
 import org.bson.BsonDouble;
 import org.bson.BsonInt32;
 import org.bson.BsonInt64;
 import org.bson.BsonString;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.ZoneOffset;
@@ -57,8 +63,10 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+
+import static com.mongodb.connection.ClusterConnectionMode.SINGLE;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 final class MongoTelemetryListener implements ClusterListener, CommandListener, ConnectionPoolListener {
 
@@ -77,6 +85,8 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
     }
 
     private final MongoTelemetryTracker telemetryTracker;
+    private volatile boolean clientSettingsDocumentTracked;
+    private final MongoClientSettings clientSettings;
     private volatile ClusterId clusterId;
     private volatile ClusterDescription clusterDescription;
 
@@ -97,14 +107,16 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
 
     public static void addToClientSettings(MongoTelemetryTracker telemetryTracker,
                                            MongoClientSettings.Builder clientSettingsBuilder) {
-        MongoTelemetryListener telemetryListener = new MongoTelemetryListener(telemetryTracker);
+        MongoTelemetryListener telemetryListener = new MongoTelemetryListener(telemetryTracker,
+                clientSettingsBuilder.build());
         clientSettingsBuilder.applyToClusterSettings(builder -> builder.addClusterListener(telemetryListener));
         clientSettingsBuilder.addCommandListener(telemetryListener);
         clientSettingsBuilder.applyToConnectionPoolSettings(builder -> builder.addConnectionPoolListener(telemetryListener));
     }
 
-    private MongoTelemetryListener(MongoTelemetryTracker telemetryTracker) {
+    private MongoTelemetryListener(MongoTelemetryTracker telemetryTracker, MongoClientSettings clientSettings) {
         this.telemetryTracker = telemetryTracker;
+        this.clientSettings = clientSettings;
     }
 
     public ClusterId getClusterId() {
@@ -134,12 +146,12 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
 
     @Override
     public void commandSucceeded(CommandSucceededEvent event) {
-        commandCompleted(event.getElapsedTime(TimeUnit.MILLISECONDS));
+        commandCompleted(event.getElapsedTime(MILLISECONDS));
     }
 
     @Override
     public void commandFailed(CommandFailedEvent event) {
-        commandCompleted(event.getElapsedTime(TimeUnit.MILLISECONDS));
+        commandCompleted(event.getElapsedTime(MILLISECONDS));
         if (event.getThrowable() instanceof MongoCommandException) {
             MongoCommandException commandException = (MongoCommandException) event.getThrowable();
             serverErrorCodeCountMap.computeIfAbsent(commandException.getErrorCode(), errorCode -> new AtomicLong()).incrementAndGet();
@@ -239,6 +251,74 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
         ConnectionPoolStatistics statistics =
                 connectionPoolStatisticsMap.get(event.getConnectionId().getServerId().getAddress());
         statistics.closedCount.incrementAndGet();
+    }
+
+    BsonDocument asClientSettingsDocument() {
+        if (clientSettingsDocumentTracked) {
+            return null;
+        }
+        clientSettingsDocumentTracked = true;
+        BsonDocument clientSettingsDocument = new BsonDocument();
+        BsonString timestamp = new BsonString(ZonedDateTime.now(ZoneOffset.UTC).format(DateTimeFormatter.ISO_INSTANT));
+        clientSettingsDocument.append("timestamp", timestamp);
+        clientSettingsDocument.append("type", new BsonInt32(1));
+        clientSettingsDocument.append("clientId", new BsonString(clusterId.getValue()));
+        BsonDocument settingsDocument = new BsonDocument();
+
+        ClusterSettings clusterSettings = clientSettings.getClusterSettings();
+        settingsDocument.append("directConnection", new BsonBoolean(clusterSettings.getMode() == SINGLE));
+        if (clusterSettings.getSrvHost() != null) {
+            settingsDocument.append("srvHost", new BsonString(clusterSettings.getSrvHost()));
+        } else {
+            settingsDocument.append("hosts", clusterSettings.getHosts()
+                    .stream().map(serverAddress -> new BsonString(serverAddress.toString()))
+                    .collect(BsonArray::new, BsonArray::add, BsonArray::addAll));
+        }
+        if (clusterSettings.getRequiredReplicaSetName() != null) {
+            settingsDocument.append("replicaSet", new BsonString(clusterSettings.getRequiredReplicaSetName()));
+        }
+
+        if (clientSettings.getApplicationName() != null) {
+            settingsDocument.append("applicationName", new BsonString(clientSettings.getApplicationName()));
+        }
+        if (clientSettings.getCredential() != null) {
+            settingsDocument.append("authenticationMechanism",
+                    new BsonString(clientSettings.getCredential().getMechanism() == null
+                            ? "SCRAM"
+                            : clientSettings.getCredential().getMechanism()));
+        }
+        settingsDocument.append("retryReads", new BsonBoolean(clientSettings.getRetryReads()));
+        settingsDocument.append("retryWrites", new BsonBoolean(clientSettings.getRetryWrites()));
+        settingsDocument.append("compressors", clientSettings.getCompressorList().stream()
+                .map(mongoCompressor -> new BsonString(mongoCompressor.getName()))
+                        .collect(BsonArray::new, BsonArray::add, BsonArray::addAll));
+        settingsDocument.append("uuidRepresentation", new BsonString(clientSettings.getUuidRepresentation().toString()));
+
+        ConnectionPoolSettings connectionPoolSettings = clientSettings.getConnectionPoolSettings();
+        settingsDocument.append("maxPoolSize", new BsonInt32(connectionPoolSettings.getMaxSize()));
+        settingsDocument.append("minPoolSize", new BsonInt32(connectionPoolSettings.getMinSize()));
+        settingsDocument.append("maxIdleTimeMS", new BsonInt64(connectionPoolSettings.getMaxConnectionIdleTime(MILLISECONDS)));
+        settingsDocument.append("waitQueueTimeoutMS", new BsonInt64(connectionPoolSettings.getMaxWaitTime(MILLISECONDS)));
+        appendMaxConnecting(connectionPoolSettings, settingsDocument);
+
+        SocketSettings socketSettings = clientSettings.getSocketSettings();
+        settingsDocument.append("connectTimeoutMS", new BsonInt32(socketSettings.getConnectTimeout(MILLISECONDS)));
+        settingsDocument.append("socketTimeoutMS", new BsonInt32(socketSettings.getReadTimeout(MILLISECONDS)));
+
+        settingsDocument.append("tls", new BsonBoolean(clientSettings.getSslSettings().isEnabled()));
+
+        clientSettingsDocument.append("settings", settingsDocument);
+        return clientSettingsDocument;
+    }
+
+    private void appendMaxConnecting(ConnectionPoolSettings connectionPoolSettings, BsonDocument settingsDocument) {
+        try {
+            Method getMaxConnectingMethod = ConnectionPoolSettings.class.getMethod("getMaxConnecting");
+            Integer maxConnecting = (Integer) getMaxConnectingMethod.invoke(connectionPoolSettings);
+            settingsDocument.append("maxConnecting", new BsonInt32(maxConnecting));
+        } catch (NoSuchMethodException | InvocationTargetException | IllegalAccessException e) {
+            // ignore
+        }
     }
 
     BsonDocument asPeriodicDocument() {

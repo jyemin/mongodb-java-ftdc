@@ -39,6 +39,62 @@ Documents of this type are written once on startup.  It's basically just the cli
 }
 ```
 
+### Type 1 documents
+
+Documents of this type are written once per MongoClient creation
+
+```json
+{
+  "timestamp": "2023-03-07T17:18:51.511Z",
+  "type": 1,
+  "clientId": "640771faab220d153b45e445",
+  "settings": {
+    "directConnection": false,
+    "hosts": [
+      "<host1>", "<host2>"
+    ],
+    "replicaSet": "rs1",
+    "retryReads": true,
+    "retryWrites": true,
+    "compressors": [],
+    "uuidRepresentation": "UNSPECIFIED",
+    "maxPoolSize": 100,
+    "minPoolSize": 0,
+    "maxIdleTimeMS": 0,
+    "waitQueueTimeoutMS": 120000,
+    "connectTimeoutMS": 10000,
+    "socketTimeoutMS": 0,
+    "tls": false
+  }
+}
+```
+
+or with `mongodb+srv` protocol:
+
+```json
+{
+  "timestamp": "2023-03-07T17:07:27.795Z",
+  "type": 1,
+  "clientId": "64076f4e5fe95d3f644c51bc",
+  "settings": {
+    "directConnection": false,
+    "srvHost": "<srv host>",
+    "retryReads": true,
+    "retryWrites": true,
+    "compressors": [],
+    "uuidRepresentation": "UNSPECIFIED",
+    "maxPoolSize": 100,
+    "minPoolSize": 0,
+    "maxIdleTimeMS": 0,
+    "waitQueueTimeoutMS": 120000,
+    "maxConnecting": 2,
+    "connectTimeoutMS": 10000,
+    "socketTimeoutMS": 0,
+    "tls": true
+  }
+}
+```
+
 ### Type 2 documents
 
 Documents of this type are written once per second

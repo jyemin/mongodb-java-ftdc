@@ -76,6 +76,10 @@ final class MongoTelemetryTracker implements Closeable {
         try {
             initFiles();
             for (MongoTelemetryListener cur : telemetryListeners.values()) {
+                BsonDocument clientSettingsDocument = cur.asClientSettingsDocument();
+                if (clientSettingsDocument != null) {
+                    writeDocument(clientSettingsDocument);
+                }
                 BsonDocument currentStateDocument = cur.asPeriodicDocument();
                 writeDocument(currentStateDocument);
             }
