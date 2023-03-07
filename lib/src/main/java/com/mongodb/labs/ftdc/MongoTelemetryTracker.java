@@ -45,7 +45,6 @@ final class MongoTelemetryTracker implements Closeable {
     private final Map<ClusterId, MongoTelemetryListener> telemetryListeners = new ConcurrentHashMap<>();
     private BufferedWriter writer;
     private long fileSize = 0;
-    private String timestamp;
     private Path path;
     private Path timestampedPath;
 
@@ -77,7 +76,6 @@ final class MongoTelemetryTracker implements Closeable {
         try {
             initFiles();
             for (MongoTelemetryListener cur : telemetryListeners.values()) {
-                rotateMetricsFile();
                 BsonDocument currentStateDocument = cur.asPeriodicDocument();
                 writeDocument(currentStateDocument);
             }
@@ -100,7 +98,7 @@ final class MongoTelemetryTracker implements Closeable {
         }
         Path directory = FileSystems.getDefault().getPath("diagnostics.data");
         path = FileSystems.getDefault().getPath("diagnostics.data", "metrics.interim");
-        timestamp = ZonedDateTime.now(ZoneOffset.UTC).format(DateTimeFormatter.ISO_INSTANT);
+        String timestamp = ZonedDateTime.now(ZoneOffset.UTC).format(DateTimeFormatter.ISO_INSTANT);
         timestampedPath = FileSystems.getDefault().getPath("diagnostics.data",
                 "metrics." + timestamp.replace(':', '-'));
         if (Files.notExists(directory)) {
@@ -116,9 +114,6 @@ final class MongoTelemetryTracker implements Closeable {
         frontMatterDocument.append("metadata", ClientMetadataHelper.CLIENT_METADATA_DOCUMENT); // TODO: internal package
         writeDocument(frontMatterDocument);
         Files.copy(path, timestampedPath);
-    }
-
-    private void rotateMetricsFile() {
     }
 
     private static final class DaemonThreadFactory implements ThreadFactory {
