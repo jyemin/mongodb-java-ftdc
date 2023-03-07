@@ -83,6 +83,7 @@ final class MongoTelemetryTracker implements Closeable {
                 BsonDocument currentStateDocument = cur.asPeriodicDocument();
                 writeDocument(currentStateDocument);
             }
+            writer.flush();
         } catch (IOException e) {
             close();
         }
@@ -92,7 +93,6 @@ final class MongoTelemetryTracker implements Closeable {
         String jsonString = currentStateDocument.toJson();
         writer.write(jsonString);
         writer.newLine();
-        writer.flush();
         fileSize += jsonString.length() + 1;  // assume all ASCII
     }
 
