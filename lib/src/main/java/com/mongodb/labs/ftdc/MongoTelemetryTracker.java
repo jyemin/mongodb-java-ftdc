@@ -47,6 +47,7 @@ final class MongoTelemetryTracker implements Closeable {
     private long fileSize = 0;
     private String timestamp;
     private Path path;
+    private Path timestampedPath;
 
     void schedule() {
         writingService.scheduleAtFixedRate(this::writeCurrentState, 1, 1, TimeUnit.SECONDS);
@@ -58,8 +59,7 @@ final class MongoTelemetryTracker implements Closeable {
         try {
             writer.close();
             writer = null;
-            Files.move(path, FileSystems.getDefault().getPath("diagnostics.data", "metrics." + timestamp.replace(':', '-')),
-                    REPLACE_EXISTING);
+            Files.move(path, timestampedPath, REPLACE_EXISTING);
         } catch (IOException e) {
             // ignore
         }
@@ -100,6 +100,9 @@ final class MongoTelemetryTracker implements Closeable {
         }
         Path directory = FileSystems.getDefault().getPath("diagnostics.data");
         path = FileSystems.getDefault().getPath("diagnostics.data", "metrics.interim");
+        timestamp = ZonedDateTime.now(ZoneOffset.UTC).format(DateTimeFormatter.ISO_INSTANT);
+        timestampedPath = FileSystems.getDefault().getPath("diagnostics.data",
+                "metrics." + timestamp.replace(':', '-'));
         if (Files.notExists(directory)) {
             Files.createDirectory(directory);
         }
@@ -107,13 +110,12 @@ final class MongoTelemetryTracker implements Closeable {
         writer = Files.newBufferedWriter(path,
                 StandardOpenOption.CREATE, StandardOpenOption.WRITE);
 
-        timestamp = ZonedDateTime.now(ZoneOffset.UTC).format(DateTimeFormatter.ISO_INSTANT);
         BsonDocument frontMatterDocument = new BsonDocument();
         frontMatterDocument.append("timestamp", new BsonString(timestamp));
         frontMatterDocument.append("type", new BsonInt32(0));
         frontMatterDocument.append("metadata", ClientMetadataHelper.CLIENT_METADATA_DOCUMENT); // TODO: internal package
         writeDocument(frontMatterDocument);
-        Files.copy(path, FileSystems.getDefault().getPath("diagnostics.data", "metrics." + timestamp.replace(':', '-')));
+        Files.copy(path, timestampedPath);
     }
 
     private void rotateMetricsFile() {
