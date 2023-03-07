@@ -58,7 +58,7 @@ final class MongoTelemetryTracker implements Closeable {
         try {
             writer.close();
             writer = null;
-            Files.move(path, FileSystems.getDefault().getPath("diagnostics.data", "metrics." + timestamp),
+            Files.move(path, FileSystems.getDefault().getPath("diagnostics.data", "metrics." + timestamp.replace(':', '-')),
                     REPLACE_EXISTING);
         } catch (IOException e) {
             // ignore
@@ -113,7 +113,7 @@ final class MongoTelemetryTracker implements Closeable {
         frontMatterDocument.append("type", new BsonInt32(0));
         frontMatterDocument.append("metadata", ClientMetadataHelper.CLIENT_METADATA_DOCUMENT); // TODO: internal package
         writeDocument(frontMatterDocument);
-        Files.copy(path, FileSystems.getDefault().getPath("diagnostics.data", "metrics." + timestamp));
+        Files.copy(path, FileSystems.getDefault().getPath("diagnostics.data", "metrics." + timestamp.replace(':', '-')));
     }
 
     private void rotateMetricsFile() {
@@ -127,5 +127,4 @@ final class MongoTelemetryTracker implements Closeable {
             return thread;
         }
     }
-
 }
