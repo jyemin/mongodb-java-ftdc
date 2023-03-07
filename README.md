@@ -10,8 +10,8 @@ and analyzed with T2 graphing tools.
 ## Behavior
 
 Outputs one JSON document per line every 1 second for each open MongoClient to a file called `metrics.interim` 
-in the `diagnostics.data` directory withing the current working directory.  Creates the file if it doesn't exist, o
-therwise appends to existing file.  On exit, moves `metrics.interim` to `metrics.<start timestamp>`
+in the `diagnostics.data` directory withing the current working directory.  Creates the file if it doesn't exist, 
+otherwise appends to existing file.  On exit, moves `metrics.interim` to `metrics.<start timestamp>`
 
 ## Sample document
 
@@ -65,6 +65,7 @@ Documents of this type are written once per MongoClient creation
     "minPoolSize": 0,
     "maxIdleTimeMS": 0,
     "waitQueueTimeoutMS": 120000,
+    "maxConnecting": 2,
     "connectTimeoutMS": 10000,
     "socketTimeoutMS": 0,
     "tls": false
