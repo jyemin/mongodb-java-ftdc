@@ -24,6 +24,8 @@ dependencies {
     // Use sync driver for testing
     testImplementation("org.mongodb:mongodb-driver-sync:4.0.0")
 
+    testImplementation("ch.qos.logback:logback-classic:1.2.9")
+
     // This dependency is exported to consumers, that is to say found on their compile classpath.
     api("org.mongodb:mongodb-driver-core:4.0.0")
 }

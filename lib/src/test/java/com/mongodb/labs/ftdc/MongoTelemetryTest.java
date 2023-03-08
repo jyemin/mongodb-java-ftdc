@@ -3,24 +3,127 @@
  */
 package com.mongodb.labs.ftdc;
 
-import com.mongodb.ConnectionString;
 import com.mongodb.MongoClientSettings;
+import com.mongodb.MongoException;
+import com.mongodb.ServerAddress;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
+import com.mongodb.client.MongoCollection;
+import com.mongodb.client.model.Filters;
+import com.mongodb.client.model.Updates;
+import com.mongodb.connection.ClusterConnectionMode;
+import com.mongodb.connection.ClusterDescription;
+import com.mongodb.connection.ServerDescription;
+import com.mongodb.connection.ServerType;
+import org.bson.BsonArray;
+import org.bson.BsonBoolean;
+import org.bson.BsonDocument;
+import org.bson.BsonInt32;
+import org.bson.BsonString;
 import org.bson.Document;
 import org.junit.jupiter.api.Test;
+
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import static com.mongodb.connection.ClusterConnectionMode.SINGLE;
+import static java.util.Arrays.asList;
+import static java.util.Collections.singletonList;
+import static java.util.concurrent.TimeUnit.SECONDS;
 
 class MongoTelemetryTest {
     @Test
     void testTelemetry() throws InterruptedException {
         MongoClientSettings.Builder clientSettingsBuilder = MongoClientSettings.builder();
-        clientSettingsBuilder.applyConnectionString(new ConnectionString("mongodb://localhost,localhost:27018/?replicaset=rs1"));
         MongoTelemetry.addTelemetryListeners(clientSettingsBuilder);
         try (MongoClient client = MongoClients.create(clientSettingsBuilder.build())) {
             for (int i = 0; i < 30; i++) {
                 client.getDatabase("admin").runCommand(new Document("ping", 1));
                 Thread.sleep(100);
             }
+        }
+    }
+
+    @Test
+    void testChaos() throws InterruptedException {
+        String applicationName = "chaos";
+        MongoClientSettings.Builder clientSettingsBuilder = MongoClientSettings.builder();
+        clientSettingsBuilder.applicationName(applicationName);
+        clientSettingsBuilder.applyToClusterSettings(builder -> builder.mode(ClusterConnectionMode.MULTIPLE)
+                .hosts(asList(new ServerAddress("localhost"), new ServerAddress("localhost:27018"))));
+        clientSettingsBuilder.applyToSocketSettings(builder -> builder.readTimeout(5, SECONDS));
+        clientSettingsBuilder.applyToConnectionPoolSettings(builder -> builder.maxSize(3).maxWaitTime(3, SECONDS));
+        MongoTelemetry.addTelemetryListeners(clientSettingsBuilder);
+
+        try (MongoClient client = MongoClients.create(clientSettingsBuilder.build())) {
+            MongoCollection<Document> collection = client.getDatabase("test").getCollection(applicationName);
+            collection.drop();
+            collection.insertOne(new Document("_id", 1));
+
+            AtomicBoolean running = new AtomicBoolean(true);
+            int numThreads = 10;
+            ExecutorService executorService = Executors.newFixedThreadPool(numThreads);
+            for (int i = 0; i < numThreads; i++) {
+                final int count = i;
+                executorService.submit(() -> {
+                    while (running.get()) {
+                        try {
+                            if (count % 2 == 0) {
+                                collection.find().first();
+                            } else {
+                                collection.updateOne(Filters.eq("_id", 1), Updates.inc("x", 1));
+                            }
+                        } catch (MongoException e) {
+                            //noinspection ThrowablePrintedToSystemOut
+                            System.out.println(e);
+                        }
+                    }
+                });
+            }
+
+            createChaos(applicationName, client.getClusterDescription());
+
+            running.set(false);
+        }
+    }
+
+    private static void createChaos(String applicationName, ClusterDescription clusterDescription) throws InterruptedException {
+        System.out.println("Sleeping...");
+        Thread.sleep(10_000);
+
+        ServerAddress primaryServerAddress = clusterDescription.getServerDescriptions().stream()
+                .filter(serverDescription -> serverDescription.getType() == ServerType.REPLICA_SET_PRIMARY)
+                .map(ServerDescription::getAddress)
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("No primary"));
+
+        try (MongoClient client = MongoClients.create(MongoClientSettings.builder()
+                .applyToClusterSettings(builder -> builder
+                        .mode(SINGLE)
+                        .hosts(singletonList(primaryServerAddress)))
+                .build())) {
+            BsonDocument configureFailPointCommand = new BsonDocument()
+                    .append("configureFailPoint", new BsonString("failCommand"))
+                    .append("mode", new BsonString("alwaysOn"))
+                    .append("data", new BsonDocument()
+                            .append("failCommands", new BsonArray(singletonList(new BsonString("find"))))
+                            .append("blockConnection", BsonBoolean.valueOf(true))
+                            .append("blockTimeMS", new BsonInt32(10_000))
+                            .append("appName", new BsonString(applicationName)));
+            client.getDatabase("admin").runCommand(configureFailPointCommand);
+
+            System.out.println("Enabled failpoint and sleeping again...");
+
+            Thread.sleep(60_000);
+
+            client.getDatabase("admin").runCommand(new BsonDocument()
+                    .append("configureFailPoint", configureFailPointCommand.getString("configureFailPoint"))
+                    .append("mode", new BsonString("off")));
+
+            System.out.println("Disabled failpoint and sleeping again...");
+
+            Thread.sleep(60_000);
         }
     }
 }
