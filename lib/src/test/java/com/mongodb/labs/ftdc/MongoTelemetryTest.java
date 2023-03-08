@@ -123,7 +123,7 @@ class MongoTelemetryTest {
 
             System.out.println("Disabled failpoint and sleeping again...");
 
-            Thread.sleep(60_000);
+            Thread.sleep(30_000);
         }
     }
 }
