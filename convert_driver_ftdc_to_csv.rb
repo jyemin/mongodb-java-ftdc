@@ -46,13 +46,15 @@ def flat_assign(dest, key, value, depth)
 end
 
 EXCLUDE_KEYS = /(clientId|topology.type|connectionPools.*.address|topology.*.address|topology.*.state|topology.*.type)/
-CALCULATE_DELTA = /(connectionPools.*|commands.*)/
+CALCULATE_DELTA = /(connectionPools.*|commands.serverErrorResponse.*|commands.gte*|commands.*Timeout|commands.completed)/
 
 def calculate_value_delta(field, doc, prevDoc)
   # set a default of 0 for any missing fields to ensure CSV aligns
   value = doc[field] || 0
   if prevDoc && CALCULATE_DELTA === field
-    value -= prevDoc[field]
+    lastValue = (prevDoc[field] || 0)
+    # add a test here to ensure the values don't swing into the negative
+    value -= lastValue if (value - lastValue >= 0)
   end
   value
 end
@@ -67,37 +69,38 @@ lines = `wc -l < #{filename}`.to_i
 pb = ProgressBar.new(lines)
 puts "Generating CSV from #{filename}"
 
-first = true
 fields = nil
+
+# first identify all unique
+puts "Gathering Headers ..."
+File.readlines(filename).each do |line|
+  pb.increment!
+  doc = flatten_json(JSON.parse(line))
+  # skip any non-telemetry document
+  next if doc["type"] != 2
+  # FIXME
+  # String out field paths that contain non-numeric values
+  doc.delete_if { |k, _| EXCLUDE_KEYS === k }
+  fields = doc.keys if fields.nil?
+
+  # append any missing fields to the field list
+  fields += doc.keys - fields
+end
+
 lastDoc = nil
 outfile = (filename.split('.')[0..1] << "csv").join('.')
+pb = ProgressBar.new(lines)
 
+puts "Writing CSV file ..."
+# next write csv using all identified fields
 CSV.open(outfile, "w") do |csv|
+  csv << fields
   File.readlines(filename).each do |line|
     pb.increment!
     doc = flatten_json(JSON.parse(line))
-
-    # skip any non-telemetry document
     next if doc["type"] != 2
-
-    # FIXME
-    # String out field paths that contain non-numeric values
-    doc.delete_if { |k, _| EXCLUDE_KEYS === k }
-
-    # initialze the fields based on the first document
-    if first
-      first = false
-      fields = doc.keys
-    end
-
-    # append any missing fields to the field list
-    fields += fields - doc.keys
-
     # iterate over the known field list and flush values in order
     csv << fields.map { |k| calculate_value_delta(k, doc, lastDoc) }
     lastDoc = doc
   end
 end
-
-# rewrite the file with headers as the first line
-File.write(outfile, "#{fields.join(',')}\n" + File.read(outfile))

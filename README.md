@@ -199,3 +199,17 @@ $ ruby convert_driver_ftdc_to_csv.rb <metrics filename>
 
 A file will be created with a `*.csv` suffix that will contain all `"type": 2` documents, excluding
 fields that don't contain numeric data (ex: `toplogy.type`)
+
+## Generating Telemetry
+
+The tests below us [`mlaunch`](https://rueckstiess.github.io/mtools/mlaunch.html) to setup a local
+replica set and run the test suite.
+
+```bash
+mlaunch init --port 27017 --replicaset --name repl0 --setParameter enableTestCommands=1
+./gradlew test --tests MongoTelemetryTest
+mlaunch stop
+```
+
+Once the tests have completed, the `diagnostic.data` folders from each replica set member can be found
+under the `data/repl0/rs[1-3]` directories.
