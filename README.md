@@ -3,14 +3,14 @@
 ## Summary
 
 Inspired by [Full Time Diagnostic Data Collection (FTDC)](https://www.mongodb.com/docs/manual/administration/analyzing-mongodb-performance/#full-time-diagnostic-data-capture) for MongoDB server,
-this project defines a set of event listeners to be used with the 
+this project defines a set of event listeners to be used with the
 [MongoDB Java driver](https://github.com/mongodb/mongo-java-driver)
 and analyzed with T2 graphing tools.
-                    
+
 ## Behavior
 
-Outputs one JSON document per line every 1 second for each open MongoClient to a file called `metrics.interim` 
-in the `diagnostics.data` directory withing the current working directory.  Creates the file if it doesn't exist, 
+Outputs one JSON document per line every 1 second for each open MongoClient to a file called `metrics.interim`
+in the `diagnostics.data` directory withing the current working directory.  Creates the file if it doesn't exist,
 otherwise appends to existing file.  On exit, moves `metrics.interim` to `metrics.<start timestamp>`
 
 ## Sample document
@@ -168,10 +168,10 @@ Add the dependency to your project, e.g.:
     <version>1.0-SNAPSHOT</version>
 </dependency>
 ```
-    
-For each `MongoClient` used in your application, create and configure an instance of 
+
+For each `MongoClient` used in your application, create and configure an instance of
 `MongoClientSettings.Builder`.  Right before building it, call
-`com.mongodb.labs.ftdc.MongoTelemetry#addTelemetryListeners`.  Then create the `MongoClient`.   
+`com.mongodb.labs.ftdc.MongoTelemetry#addTelemetryListeners`.  Then create the `MongoClient`.
 
 ```java
 MongoClientSettings.Builder clientSettingsBuilder = MongoClientSettings.builder();
@@ -181,3 +181,21 @@ MongoTelemetry.addTelemetryListeners(clientSettingsBuilder);
 
 MongoClient client = MongoClients.create(clientSettingsBuilder.build());
 ```
+
+## Working with Telemetry
+
+A `diagnostic.data` directory will be created under your application's working directory and will
+contain one to main `metrics.<timestamp>` files. These files contain a single JSON document per
+line that represents a telemetry document (as described above).
+
+To chart the metrics that are being recorded, they must first be converted to CSV and imported
+into [`t2`](https://github.com/10gen/t2).
+
+This can be done using the provided `convert_driver_ftdc_to_csv.rb` script as follows:
+
+```bash
+$ ruby convert_driver_ftdc_to_csv.rb <metrics filename>
+```
+
+A file will be created with a `*.csv` suffix that will contain all `"type": 2` documents, excluding
+fields that don't contain numeric data (ex: `toplogy.type`)
