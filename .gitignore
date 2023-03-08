@@ -13,10 +13,11 @@ hs_err_pid*
 # Ignore Gradle build output directory
 build
 
+# Ignore data directory created by tests
+diagnostics.data
+
 # Intellij IDEA files
 .idea
-
-lib/diagnostics.data
 
 # Other
 .DS_Store
