@@ -15,19 +15,33 @@ plugins {
 repositories {
     // Use Maven Central for resolving dependencies.
     mavenCentral()
+    mavenLocal()
 }
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_19
+}
+
+tasks.withType<JavaCompile> {
+    options.compilerArgs.add("--enable-preview")
+}
+tasks.test {
+    useJUnitPlatform()
+    jvmArgs("--enable-preview")
+}
+
 
 dependencies {
     // Use JUnit Jupiter for testing.
-    testImplementation("org.junit.jupiter:junit-jupiter:5.7.2")
+    testImplementation("org.junit.jupiter:junit-jupiter:5.9.2")
 
     // Use sync driver for testing
-    testImplementation("org.mongodb:mongodb-driver-sync:4.0.0")
+    testImplementation("org.mongodb:mongodb-driver-sync:4.10.0-SNAPSHOT")
 
-    testImplementation("ch.qos.logback:logback-classic:1.2.9")
+    testImplementation("ch.qos.logback:logback-classic:1.4.6")
 
     // This dependency is exported to consumers, that is to say found on their compile classpath.
-    api("org.mongodb:mongodb-driver-core:4.0.0")
+    api("org.mongodb:mongodb-driver-core:4.10.0-SNAPSHOT")
 }
 
 tasks.named<Test>("test") {

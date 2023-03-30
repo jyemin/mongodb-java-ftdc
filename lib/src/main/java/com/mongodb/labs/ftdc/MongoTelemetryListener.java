@@ -82,6 +82,18 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
         private final AtomicLong closedCount = new AtomicLong();
         private final AtomicLong checkOutsInProgressCount = new AtomicLong();
         private final AtomicLong operationsInProgressCount = new AtomicLong();
+        private final AtomicLong checkOutsGte0MsCount = new AtomicLong();
+        private final AtomicLong checkOutsGte10MsCount = new AtomicLong();
+        private final AtomicLong checkOutsGte100MsCount = new AtomicLong();
+        private final AtomicLong checkOutsGte1000MsCount = new AtomicLong();
+        private final AtomicLong checkOutsGte10000MsCount = new AtomicLong();
+        private final AtomicLong checkOutsGte100000MsCount = new AtomicLong();
+        private final AtomicLong operationsGte0MsCount = new AtomicLong();
+        private final AtomicLong operationsGte10MsCount = new AtomicLong();
+        private final AtomicLong operationsGte100MsCount = new AtomicLong();
+        private final AtomicLong operationsGte1000MsCount = new AtomicLong();
+        private final AtomicLong operationsGte10000MsCount = new AtomicLong();
+        private final AtomicLong operationsGte100000MsCount = new AtomicLong();
     }
 
     private final MongoTelemetryTracker telemetryTracker;
@@ -229,6 +241,25 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
                 connectionPoolStatisticsMap.get(event.getServerId().getAddress());
         statistics.checkOutFailedCount.incrementAndGet();
         statistics.checkOutsInProgressCount.decrementAndGet();
+        connectionCheckOutCompleted(statistics, event.getElapsedTime(MILLISECONDS));
+    }
+
+    private void connectionCheckOutCompleted(ConnectionPoolStatistics statistics, long elapsedTimeMillis) {
+        if (elapsedTimeMillis >= 1000000) {
+            statistics.checkOutsGte100000MsCount.incrementAndGet();
+        } else if (elapsedTimeMillis >= 100000) {
+            statistics.checkOutsGte10000MsCount.incrementAndGet();
+        } else if (elapsedTimeMillis >= 10000) {
+            statistics.checkOutsGte10000MsCount.incrementAndGet();
+        } else if (elapsedTimeMillis >= 1000) {
+            statistics.checkOutsGte1000MsCount.incrementAndGet();
+        } else if (elapsedTimeMillis >= 100) {
+            statistics.checkOutsGte100MsCount.incrementAndGet();
+        } else if (elapsedTimeMillis >= 10) {
+            statistics.checkOutsGte10MsCount.incrementAndGet();
+        } else {
+            statistics.checkOutsGte0MsCount.incrementAndGet();
+        }
     }
 
     @Override
@@ -236,8 +267,23 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
         ConnectionPoolStatistics statistics =
                 connectionPoolStatisticsMap.get(event.getConnectionId().getServerId().getAddress());
         statistics.checkedInCount.incrementAndGet();
-        statistics.operationsInProgressCount.incrementAndGet();
-    }
+        statistics.operationsInProgressCount.decrementAndGet();
+        long elapsedTimeMillis = event.getElapsedTime(MILLISECONDS);
+        if (elapsedTimeMillis >= 1000000) {
+            statistics.operationsGte100000MsCount.incrementAndGet();
+        } else if (elapsedTimeMillis >= 100000) {
+            statistics.operationsGte10000MsCount.incrementAndGet();
+        } else if (elapsedTimeMillis >= 10000) {
+            statistics.operationsGte10000MsCount.incrementAndGet();
+        } else if (elapsedTimeMillis >= 1000) {
+            statistics.operationsGte1000MsCount.incrementAndGet();
+        } else if (elapsedTimeMillis >= 100) {
+            statistics.operationsGte100MsCount.incrementAndGet();
+        } else if (elapsedTimeMillis >= 10) {
+            statistics.operationsGte10MsCount.incrementAndGet();
+        } else {
+            statistics.operationsGte0MsCount.incrementAndGet();
+        }    }
 
     @Override
     public void connectionCreated(final ConnectionCreatedEvent event) {
@@ -421,17 +467,34 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
             BsonDocument poolDocument = new BsonDocument();
 
             poolDocument.append("address", new BsonString(cur.getKey().toString()));
-            poolDocument.append("checkOutsInProgress", new BsonInt64(cur.getValue().checkOutsInProgressCount.get()));
-            poolDocument.append("operationsInProgress", new BsonInt64(cur.getValue().checkOutsInProgressCount.get()));
 
-            poolDocument.append("ready", new BsonInt64(cur.getValue().readyCount.get()));
-            poolDocument.append("cleared", new BsonInt64(cur.getValue().clearedCount.get()));
-            poolDocument.append("opened", new BsonInt64(cur.getValue().createdCount.get()));
-            poolDocument.append("closed", new BsonInt64(cur.getValue().closedCount.get()));
-            poolDocument.append("checkOutStarted", new BsonInt64(cur.getValue().checkOutStartedCount.get()));
-            poolDocument.append("checkOutFailed", new BsonInt64(cur.getValue().checkOutFailedCount.get()));
-            poolDocument.append("checkedOut", new BsonInt64(cur.getValue().checkedOutCount.get()));
-            poolDocument.append("checkedIn", new BsonInt64(cur.getValue().checkedInCount.get()));
+            ConnectionPoolStatistics statistics = cur.getValue();
+            poolDocument.append("checkOutsInProgress", new BsonInt64(statistics.checkOutsInProgressCount.get()));
+            poolDocument.append("checkOutsGte0Millis", new BsonInt64(statistics.checkOutsGte0MsCount.get()));
+            poolDocument.append("checkOutsGte10Millis", new BsonInt64(statistics.checkOutsGte10MsCount.get()));
+            poolDocument.append("checkOutsGte100Millis", new BsonInt64(statistics.checkOutsGte100MsCount.get()));
+            poolDocument.append("checkOutsGte1000Millis", new BsonInt64(statistics.checkOutsGte1000MsCount.get()));
+            poolDocument.append("checkOutsGte10000Millis", new BsonInt64(statistics.checkOutsGte10000MsCount.get()));
+            poolDocument.append("checkOutsGte100000Millis", new BsonInt64(statistics.checkOutsGte10000MsCount.get()));
+            poolDocument.append("checkOutsGte1000000Millis", new BsonInt64(statistics.checkOutsGte100000MsCount.get()));
+
+            poolDocument.append("operationsInProgress", new BsonInt64(statistics.operationsInProgressCount.get()));
+            poolDocument.append("operationsGte0Millis", new BsonInt64(statistics.operationsGte0MsCount.get()));
+            poolDocument.append("operationsGte10Millis", new BsonInt64(statistics.operationsGte10MsCount.get()));
+            poolDocument.append("operationsGte100Millis", new BsonInt64(statistics.operationsGte100MsCount.get()));
+            poolDocument.append("operationsGte1000Millis", new BsonInt64(statistics.operationsGte1000MsCount.get()));
+            poolDocument.append("operationsGte10000Millis", new BsonInt64(statistics.operationsGte10000MsCount.get()));
+            poolDocument.append("operationsGte100000Millis", new BsonInt64(statistics.operationsGte10000MsCount.get()));
+            poolDocument.append("operationsGte1000000Millis", new BsonInt64(statistics.operationsGte100000MsCount.get()));
+
+            poolDocument.append("ready", new BsonInt64(statistics.readyCount.get()));
+            poolDocument.append("cleared", new BsonInt64(statistics.clearedCount.get()));
+            poolDocument.append("opened", new BsonInt64(statistics.createdCount.get()));
+            poolDocument.append("closed", new BsonInt64(statistics.closedCount.get()));
+            poolDocument.append("checkOutStarted", new BsonInt64(statistics.checkOutStartedCount.get()));
+            poolDocument.append("checkOutFailed", new BsonInt64(statistics.checkOutFailedCount.get()));
+            poolDocument.append("checkedOut", new BsonInt64(statistics.checkedOutCount.get()));
+            poolDocument.append("checkedIn", new BsonInt64(statistics.checkedInCount.get()));
 
             poolsArray.add(poolDocument);
         }
