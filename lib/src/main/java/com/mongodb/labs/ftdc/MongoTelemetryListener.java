@@ -63,7 +63,6 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static com.mongodb.connection.ClusterConnectionMode.SINGLE;
@@ -85,9 +84,10 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
         private final AtomicLong operationsInProgressCount = new AtomicLong();
     }
 
-    private final AtomicBoolean closed = new AtomicBoolean();
     private final MongoTelemetryTracker telemetryTracker;
     private volatile boolean clientSettingsDocumentTracked;
+    private volatile ZonedDateTime openDateTime;
+    private volatile ZonedDateTime closedDateTime;
     private final MongoClientSettings clientSettings;
     private volatile ClusterId clusterId;
     private volatile ClusterDescription clusterDescription;
@@ -126,18 +126,19 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
     }
 
     public boolean isClosed() {
-        return closed.get();
+        return closedDateTime != null;
     }
 
     @Override
     public void clusterOpening(final ClusterOpeningEvent event) {
         clusterId = event.getClusterId();
+        openDateTime = getNow();
         telemetryTracker.add(this);
     }
 
     @Override
     public void clusterClosed(final ClusterClosedEvent event) {
-        closed.set(true);
+        closedDateTime = getNow();
     }
 
     @Override
@@ -261,7 +262,7 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
 
     BsonDocument asClientClosedDocument() {
         BsonDocument clientClosedDocument = new BsonDocument();
-        BsonString timestamp = new BsonString(ZonedDateTime.now(ZoneOffset.UTC).format(DateTimeFormatter.ISO_INSTANT));
+        BsonString timestamp = new BsonString(formatDateTime(closedDateTime));
         clientClosedDocument.append("timestamp", timestamp);
         clientClosedDocument.append("type", new BsonInt32(1));
         clientClosedDocument.append("clientId", new BsonString(clusterId.getValue()));
@@ -275,7 +276,7 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
         }
         clientSettingsDocumentTracked = true;
         BsonDocument clientSettingsDocument = new BsonDocument();
-        BsonString timestamp = new BsonString(ZonedDateTime.now(ZoneOffset.UTC).format(DateTimeFormatter.ISO_INSTANT));
+        BsonString timestamp = new BsonString(formatDateTime(openDateTime));
         clientSettingsDocument.append("timestamp", timestamp);
         clientSettingsDocument.append("type", new BsonInt32(1));
         clientSettingsDocument.append("clientId", new BsonString(clusterId.getValue()));
@@ -343,7 +344,7 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
     }
 
     BsonDocument asPeriodicDocument() {
-        BsonString timestamp = new BsonString(ZonedDateTime.now(ZoneOffset.UTC).format(DateTimeFormatter.ISO_INSTANT));
+        BsonString timestamp = new BsonString(formatDateTime(getNow()));
         BsonDocument periodicDocument = new BsonDocument();
         periodicDocument.append("timestamp", timestamp);
         periodicDocument.append("type", new BsonInt32(2));
@@ -353,6 +354,14 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
         appendCommands(periodicDocument);
         appendConnectionPools(periodicDocument);
         return periodicDocument;
+    }
+
+    private static ZonedDateTime getNow() {
+        return ZonedDateTime.now(ZoneOffset.UTC);
+    }
+
+    private String formatDateTime(final ZonedDateTime dateTime) {
+        return dateTime.format(DateTimeFormatter.ISO_INSTANT);
     }
 
     private void appendClusterDescription(final BsonDocument periodicDocument) {
