@@ -121,6 +121,7 @@ final class MongoTelemetryTracker implements Closeable {
         frontMatterDocument.append("type", new BsonInt32(0));
         frontMatterDocument.append("metadata", ClientMetadataHelper.CLIENT_METADATA_DOCUMENT); // TODO: internal package
         writeDocument(frontMatterDocument);
+        writer.flush();
         Files.copy(path, timestampedPath);
     }
 
