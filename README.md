@@ -200,7 +200,7 @@ MongoClient client = MongoClients.create(clientSettingsBuilder.build());
 ## Working with Telemetry
 
 A `diagnostic.data` directory will be created under your application's working directory and will
-contain one to main `metrics.<timestamp>` files. These files contain a single JSON document per
+contain one to many `metrics.<timestamp>` files. These files contain a single JSON document per
 line that represents a telemetry document (as described above).
 
 To chart the metrics that are being recorded, they must first be converted to CSV and imported
@@ -228,3 +228,8 @@ mlaunch stop
 
 Once the tests have completed, the `diagnostic.data` folders from each replica set member can be found
 under the `data/repl0/rs[1-3]` directories.
+
+## Future work
+
+* Rotating telemetry files
+* Limiting the total size of the diagnostics.data directory
