@@ -41,13 +41,16 @@ Documents of this type are written once on startup.  It's basically just the cli
 
 ### Type 1 documents
 
-Documents of this type are written once per MongoClient creation
+Documents of this type are written twice per MongoClient creation, once on construction and once on close.
+                  
+On construction, a document like this is written:
 
 ```json
 {
   "timestamp": "2023-03-07T17:18:51.511Z",
   "type": 1,
   "clientId": "640771faab220d153b45e445",
+  "opened": true,
   "settings": {
     "directConnection": false,
     "hosts": [
@@ -80,6 +83,7 @@ or with `mongodb+srv` protocol:
   "timestamp": "2023-03-07T17:07:27.795Z",
   "type": 1,
   "clientId": "64076f4e5fe95d3f644c51bc",
+  "opened": true,
   "settings": {
     "directConnection": false,
     "srvHost": "<srv host>",
@@ -100,6 +104,17 @@ or with `mongodb+srv` protocol:
     "socketTimeoutMS": 0,
     "tls": true
   }
+}
+```
+      
+On close, a document like this is written:
+
+```json
+{
+  "timestamp": "2023-03-07T17:07:27.795Z",
+  "type": 1,
+  "clientId": "64076f4e5fe95d3f644c51bc",
+  "opened": false
 }
 ```
 

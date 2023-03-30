@@ -32,6 +32,7 @@ import java.nio.file.StandardOpenOption;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -71,20 +72,22 @@ final class MongoTelemetryTracker implements Closeable {
         telemetryListeners.put(telemetryListener.getClusterId(), telemetryListener);
     }
 
-    void remove(final MongoTelemetryListener telemetryListener) {
-        telemetryListeners.remove(telemetryListener.getClusterId());
-    }
-
     private void writeCurrentState() {
         try {
             initFiles();
-            for (MongoTelemetryListener cur : telemetryListeners.values()) {
+            for (Iterator<MongoTelemetryListener> iterator = telemetryListeners.values().iterator();
+                 iterator.hasNext(); ) {
+                MongoTelemetryListener cur = iterator.next();
                 BsonDocument clientSettingsDocument = cur.asClientSettingsDocument();
                 if (clientSettingsDocument != null) {
                     writeDocument(clientSettingsDocument);
                 }
                 BsonDocument currentStateDocument = cur.asPeriodicDocument();
                 writeDocument(currentStateDocument);
+                if (cur.isClosed()) {
+                    writeDocument(cur.asClientClosedDocument());
+                    iterator.remove();
+                }
             }
             writer.flush();
         } catch (IOException e) {

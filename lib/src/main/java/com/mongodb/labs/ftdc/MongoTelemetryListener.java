@@ -63,6 +63,7 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static com.mongodb.connection.ClusterConnectionMode.SINGLE;
@@ -84,6 +85,7 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
         private final AtomicLong operationsInProgressCount = new AtomicLong();
     }
 
+    private final AtomicBoolean closed = new AtomicBoolean();
     private final MongoTelemetryTracker telemetryTracker;
     private volatile boolean clientSettingsDocumentTracked;
     private final MongoClientSettings clientSettings;
@@ -123,6 +125,10 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
         return clusterId;
     }
 
+    public boolean isClosed() {
+        return closed.get();
+    }
+
     @Override
     public void clusterOpening(final ClusterOpeningEvent event) {
         clusterId = event.getClusterId();
@@ -131,7 +137,7 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
 
     @Override
     public void clusterClosed(final ClusterClosedEvent event) {
-        telemetryTracker.remove(this);
+        closed.set(true);
     }
 
     @Override
@@ -253,6 +259,16 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
         statistics.closedCount.incrementAndGet();
     }
 
+    BsonDocument asClientClosedDocument() {
+        BsonDocument clientClosedDocument = new BsonDocument();
+        BsonString timestamp = new BsonString(ZonedDateTime.now(ZoneOffset.UTC).format(DateTimeFormatter.ISO_INSTANT));
+        clientClosedDocument.append("timestamp", timestamp);
+        clientClosedDocument.append("type", new BsonInt32(1));
+        clientClosedDocument.append("clientId", new BsonString(clusterId.getValue()));
+        clientClosedDocument.append("opened", new BsonBoolean(false));
+        return clientClosedDocument;
+    }
+
     BsonDocument asClientSettingsDocument() {
         if (clientSettingsDocumentTracked) {
             return null;
@@ -263,6 +279,7 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
         clientSettingsDocument.append("timestamp", timestamp);
         clientSettingsDocument.append("type", new BsonInt32(1));
         clientSettingsDocument.append("clientId", new BsonString(clusterId.getValue()));
+        clientSettingsDocument.append("opened", new BsonBoolean(true));
         BsonDocument settingsDocument = new BsonDocument();
 
         ClusterSettings clusterSettings = clientSettings.getClusterSettings();
@@ -316,6 +333,7 @@ final class MongoTelemetryListener implements ClusterListener, CommandListener, 
 
     private void appendMaxConnecting(final ConnectionPoolSettings connectionPoolSettings, final BsonDocument settingsDocument) {
         try {
+            @SuppressWarnings("JavaReflectionMemberAccess")
             Method getMaxConnectingMethod = ConnectionPoolSettings.class.getMethod("getMaxConnecting");
             Integer maxConnecting = (Integer) getMaxConnectingMethod.invoke(connectionPoolSettings);
             settingsDocument.append("maxConnecting", new BsonInt32(maxConnecting));
