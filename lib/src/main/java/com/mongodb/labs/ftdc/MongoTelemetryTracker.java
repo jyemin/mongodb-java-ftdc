@@ -48,7 +48,6 @@ final class MongoTelemetryTracker implements Closeable {
 
     private final Map<ClusterId, MongoTelemetryListener> telemetryListeners = new ConcurrentHashMap<>();
     private BufferedWriter writer;
-    private long fileSize = 0;
     private Path path;
     private Path timestampedPath;
 
@@ -97,7 +96,6 @@ final class MongoTelemetryTracker implements Closeable {
         String jsonString = currentStateDocument.toJson();
         writer.write(jsonString);
         writer.newLine();
-        fileSize += jsonString.length() + 1;  // assume all ASCII
     }
 
     private void initFiles() throws IOException {
@@ -127,7 +125,7 @@ final class MongoTelemetryTracker implements Closeable {
 
     private static final class DaemonThreadFactory implements ThreadFactory {
         @Override
-        public Thread newThread(final Runnable runnable) {
+        public Thread newThread(@SuppressWarnings("NullableProblems") final Runnable runnable) {
             Thread thread = new Thread(runnable, "MongoTelemetryTracker");
             thread.setDaemon(true);
             return thread;
